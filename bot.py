@@ -45,20 +45,36 @@ async def main():
                 ),
             )
         else:
-            await bot.send_message(
-                message.chat.id,
-                config['MESSAGES'][0],
-                reply_markup=quick_markup(
-                    {'QUERO COMPRAR ✅': {'callback_data': 'purchase:0'}}
-                ),
-            )
+            file_path = [f for f in os.listdir('.') if 'message_1' in f][0]
+            if 'mp4' in file_path:
+                await bot.send_video(
+                    message.chat.id,
+                    open(file_path, 'rb'),
+                    supports_streaming=True,
+                    caption=config['MESSAGES'][0],
+                    reply_markup=quick_markup(
+                        {'QUERO COMPRAR ✅': {'callback_data': 'purchase:0'}}
+                    ),
+                )
+            else:
+                await bot.send_photo(
+                    message.chat.id,
+                    open(file_path, 'rb'),
+                    caption=config['MESSAGES'][0],
+                    reply_markup=quick_markup(
+                        {'QUERO COMPRAR ✅': {'callback_data': 'purchase:0'}}
+                    ),
+                )
 
     @bot.callback_query_handler(func=lambda c: 'change_message' in c.data)
     async def change_message(callback_query):
         index = int(callback_query.data.split(':')[-1])
-        await bot.send_message(
-            callback_query.message.chat.id, 'Digite a mensagem:'
-        )
+        try:
+            os.remove(
+                [f for f in os.listdir('.') if f'message_{index + 1}' in f][0]
+            )
+        except IndexError:
+            pass
         await bot.set_state(
             callback_query.message.chat.id,
             BotStatesGroup.on_change_message,
@@ -68,11 +84,28 @@ async def main():
             callback_query.message.chat.id, callback_query.message.chat.id
         ) as data:
             data['index'] = index
+        await bot.send_message(
+            callback_query.message.chat.id, 'Digite a mensagem:'
+        )
 
-    @bot.message_handler(state=BotStatesGroup.on_change_message)
-    async def change_message_action(message):
+    @bot.message_handler(
+        state=BotStatesGroup.on_change_message,
+        content_types=['photo', 'video'],
+    )
+    async def on_change_message(message):
         async with bot.retrieve_data(message.chat.id, message.chat.id) as data:
-            config['MESSAGES'][data['index']] = message.text
+            if message.photo:
+                media = message.photo[-1]
+            else:
+                media = message.video
+            file_info = await bot.get_file(media.file_id)
+            downloaded_file = await bot.download_file(file_info.file_path)
+            file_extension = file_info.file_path.split('.')[-1]
+            with open(
+                f'message_{data["index"] + 1}.{file_extension}', 'wb'
+            ) as file:
+                file.write(downloaded_file)
+            config['MESSAGES'][data['index']] = message.caption
             toml.dump(config, open('.config.toml', 'w'))
         await bot.delete_state(message.chat.id, message.chat.id)
         await bot.send_message(message.chat.id, 'Mensagem Alterada')
@@ -129,7 +162,7 @@ async def main():
         await bot.process_new_updates(updates)
         with Session() as session:
             for payment in session.scalars(select(Payment)).all():
-                response = sdk.payment().get(payment.payment_id)
+                response = sdk.payment().get(payment.payment_id)['response']
                 if response['status'] == 'approved':
                     invite = await bot.create_chat_invite_link(
                         config['CHATS'][payment.chat_index], member_limit=1
@@ -145,17 +178,36 @@ async def main():
                         client = Client(user_id=payment.user_id)
                         session.add(client)
                         session.commit()
-                        await bot.send_message(
-                            payment.user_id,
-                            config['MESSAGES'][1],
-                            reply_markup=quick_markup(
-                                {
-                                    'QUERO COMPRAR ✅': {
-                                        'callback_data': 'purchase:1'
+                        file_path = [
+                            f for f in os.listdir('.') if 'message_2' in f
+                        ][0]
+                        if 'mp4' in file_path:
+                            await bot.send_video(
+                                payment.user_id,
+                                open(file_path, 'rb'),
+                                supports_streaming=True,
+                                caption=config['MESSAGES'][1],
+                                reply_markup=quick_markup(
+                                    {
+                                        'QUERO COMPRAR ✅': {
+                                            'callback_data': 'purchase:1'
+                                        }
                                     }
-                                }
-                            ),
-                        )
+                                ),
+                            )
+                        else:
+                            await bot.send_photo(
+                                payment.user_id,
+                                open(file_path, 'rb'),
+                                caption=config['MESSAGES'][1],
+                                reply_markup=quick_markup(
+                                    {
+                                        'QUERO COMPRAR ✅': {
+                                            'callback_data': 'purchase:1'
+                                        }
+                                    }
+                                ),
+                            )
                     else:
                         signature = Signature(
                             chat_id=str(config['CHATS'][payment.chat_index]),
