@@ -45,22 +45,31 @@ async def main():
                 ),
             )
         else:
-            file_path = [f for f in os.listdir('.') if 'message_1' in f][0]
-            if 'mp4' in file_path:
-                await bot.send_video(
+            try:
+                file_path = [f for f in os.listdir('.') if 'message_1' in f][0]
+                if 'mp4' in file_path.lower():
+                    await bot.send_video(
+                        message.chat.id,
+                        open(file_path, 'rb'),
+                        supports_streaming=True,
+                        caption=config['MESSAGES'][0],
+                        reply_markup=quick_markup(
+                            {'QUERO COMPRAR ✅': {'callback_data': 'purchase:0'}}
+                        ),
+                    )
+                else:
+                    await bot.send_photo(
+                        message.chat.id,
+                        open(file_path, 'rb'),
+                        caption=config['MESSAGES'][0],
+                        reply_markup=quick_markup(
+                            {'QUERO COMPRAR ✅': {'callback_data': 'purchase:0'}}
+                        ),
+                    )
+            except IndexError:
+                await bot.send_message(
                     message.chat.id,
-                    open(file_path, 'rb'),
-                    supports_streaming=True,
-                    caption=config['MESSAGES'][0],
-                    reply_markup=quick_markup(
-                        {'QUERO COMPRAR ✅': {'callback_data': 'purchase:0'}}
-                    ),
-                )
-            else:
-                await bot.send_photo(
-                    message.chat.id,
-                    open(file_path, 'rb'),
-                    caption=config['MESSAGES'][0],
+                    config['MESSAGES'][0],
                     reply_markup=quick_markup(
                         {'QUERO COMPRAR ✅': {'callback_data': 'purchase:0'}}
                     ),
@@ -96,16 +105,21 @@ async def main():
         async with bot.retrieve_data(message.chat.id, message.chat.id) as data:
             if message.photo:
                 media = message.photo[-1]
-            else:
+            elif message.video:
                 media = message.video
-            file_info = await bot.get_file(media.file_id)
-            downloaded_file = await bot.download_file(file_info.file_path)
-            file_extension = file_info.file_path.split('.')[-1]
-            with open(
-                f'message_{data["index"] + 1}.{file_extension}', 'wb'
-            ) as file:
-                file.write(downloaded_file)
-            config['MESSAGES'][data['index']] = message.caption
+            else:
+                media = None
+            if media:
+                file_info = await bot.get_file(media.file_id)
+                downloaded_file = await bot.download_file(file_info.file_path)
+                file_extension = file_info.file_path.split('.')[-1]
+                with open(
+                    f'message_{data["index"] + 1}.{file_extension}', 'wb'
+                ) as file:
+                    file.write(downloaded_file)
+                config['MESSAGES'][data['index']] = message.caption
+            else:
+                config['MESSAGES'][data['index']] = message.text
             toml.dump(config, open('.config.toml', 'w'))
         await bot.delete_state(message.chat.id, message.chat.id)
         await bot.send_message(message.chat.id, 'Mensagem Alterada')
@@ -169,7 +183,7 @@ async def main():
                     )
                     await bot.send_message(
                         payment.user_id,
-                        'Pagamento realizado! Esperamos que goste',
+                        'Esperamos que goste ❤️',
                         reply_markup=quick_markup(
                             {'Entrar no grupo': {'url': invite.invite_link}}
                         ),
@@ -178,28 +192,41 @@ async def main():
                         client = Client(user_id=payment.user_id)
                         session.add(client)
                         session.commit()
-                        file_path = [
-                            f for f in os.listdir('.') if 'message_2' in f
-                        ][0]
-                        if 'mp4' in file_path:
-                            await bot.send_video(
-                                payment.user_id,
-                                open(file_path, 'rb'),
-                                supports_streaming=True,
-                                caption=config['MESSAGES'][1],
-                                reply_markup=quick_markup(
-                                    {
-                                        'QUERO COMPRAR ✅': {
-                                            'callback_data': 'purchase:1'
+                        try:
+                            file_path = [
+                                f for f in os.listdir('.') if 'message_2' in f
+                            ][0]
+                            if 'mp4' in file_path.lower():
+                                await bot.send_video(
+                                    payment.user_id,
+                                    open(file_path, 'rb'),
+                                    supports_streaming=True,
+                                    caption=config['MESSAGES'][1],
+                                    reply_markup=quick_markup(
+                                        {
+                                            'QUERO COMPRAR ✅': {
+                                                'callback_data': 'purchase:1'
+                                            }
                                         }
-                                    }
-                                ),
-                            )
-                        else:
-                            await bot.send_photo(
+                                    ),
+                                )
+                            else:
+                                await bot.send_photo(
+                                    payment.user_id,
+                                    open(file_path, 'rb'),
+                                    caption=config['MESSAGES'][1],
+                                    reply_markup=quick_markup(
+                                        {
+                                            'QUERO COMPRAR ✅': {
+                                                'callback_data': 'purchase:1'
+                                            }
+                                        }
+                                    ),
+                                )
+                        except IndexError:
+                            await bot.send_message(
                                 payment.user_id,
-                                open(file_path, 'rb'),
-                                caption=config['MESSAGES'][1],
+                                config['MESSAGES'][1],
                                 reply_markup=quick_markup(
                                     {
                                         'QUERO COMPRAR ✅': {
